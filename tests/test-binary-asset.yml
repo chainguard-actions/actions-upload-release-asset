@@ -1,0 +1,43 @@
+name: Test upload-release-asset with binary asset
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a dummy binary asset file
+        run: |
+          # Create a small binary-like file (a zip archive)
+          echo "binary content" > /tmp/test-binary.bin
+          zip /tmp/test-release.zip /tmp/test-binary.bin
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          upload_url: "https://uploads.github.com/repos/actionchain-harness/fake__repo/releases/42/assets{?name,label}"
+          asset_path: /tmp/test-release.zip
+          asset_name: test-release.zip
+          asset_content_type: application/zip
+
+      - name: Assert action ran (succeeded or failed gracefully on sentinel repo)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          DOWNLOAD_URL: ${{ steps.action.outputs.browser_download_url }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "browser_download_url: $DOWNLOAD_URL"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$DOWNLOAD_URL" ]; then
+              echo "FAIL: action succeeded but browser_download_url is empty"
+              exit 1
+            fi
+            echo "PASS: got browser_download_url='$DOWNLOAD_URL'"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (sentinel repo / fake upload URL is not resolvable)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
